@@ -38,7 +38,7 @@
     "dist-node": "npm run dist-modules && cd dist && zip hfs-node-$(jq -r .version ../package.json).zip -r * -x *.zip *.exe hfs-* *.log logs"
   },
   "engines": {
-    "node": ">=18.5.0"
+    "node": ">=20.18.0"
   },
   "files": [
     "central.json",
@@ -62,10 +62,10 @@
       "**/node_modules/axios/dist/node/*"
     ],
     "targets": [
-      "node18-win-x64",
-      "node18-mac-x64",
-      "node18-mac-arm64",
-      "node18-linux-x64"
+      "node20-win-x64",
+      "node20-mac-x64",
+      "node20-mac-arm64",
+      "node20-linux-x64"
     ]
   },
   "dependencies": {
