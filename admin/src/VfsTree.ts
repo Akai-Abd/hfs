@@ -1,7 +1,7 @@
 // This file is part of HFS - Copyright 2021-2023, Massimo Melina <a@rejetto.com> - License https://www.gnu.org/licenses/gpl-3.0.txt
 
 import { state, useSnapState } from './state'
-import { createElement as h, ReactElement, useRef, useState } from 'react'
+import { createElement as h, ReactElement, useEffect, useRef, useState } from 'react'
 import { TreeItem, TreeView } from '@mui/x-tree-view'
 import { ChevronRight, ExpandMore, TheaterComedy, Folder, Home, Link, InsertDriveFileOutlined, Lock,
     RemoveRedEye, Web, Upload, Cloud, Delete, HighlightOff } from '@mui/icons-material'
@@ -23,7 +23,11 @@ export default function VfsTree({ id2node, statusApi }:{ id2node: Map<string, Vf
     const ref = useRef<HTMLUListElement>()
     if (!vfs)
         return null
+    // be sure selected element is visible
     const treeId = 'vfs'
+    const first = selectedFiles[0]
+    useEffect(() => document.getElementById(`${treeId}-${first?.id}`)?.scrollIntoView({ block: 'center', behavior: 'instant' as any }),
+        [first])
     return h(TreeView, {
         // @ts-ignore the type declared on the lib doesn't seem to be compatible with useRef()
         ref,
@@ -65,7 +69,7 @@ export default function VfsTree({ id2node, statusApi }:{ id2node: Map<string, Vf
                 onDragOver(ev) {
                     if (!folder) return
                     const src = dragging.current
-                    if (src?.startsWith(id) && !src.slice(id.length + 1).includes('/')) return // src must be not me or my parent
+                    if (src?.startsWith(id) && !src.slice(id.length + 1, -1).includes('/')) return // dragging node (src) must not be direct child of destination (id)
                     ev.preventDefault()
                 },
                 async onDrop() {
@@ -102,7 +106,7 @@ export default function VfsTree({ id2node, statusApi }:{ id2node: Map<string, Vf
                 isRoot ? "Home" : (() => { // special rendering if the whole source is not too long, and the name was not customized
                     const ps = node.parent?.source
                     const { source } = node
-                    const rel = ps && source?.startsWith(ps) ? '.' + source.slice(ps.length) : source
+                    const rel = ps && source?.startsWith(ps) && source > ps ? '.' + source.slice(ps.length) : source
                     return !rel || !source?.endsWith(name) || rel.length > 45 ? name
                         : h('span', {},
                             h('span', { style: { opacity: .4, fontSize: 'small' } }, rel.slice(0,-name.length)),

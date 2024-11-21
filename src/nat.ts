@@ -1,7 +1,7 @@
 import { proxy } from 'valtio'
 import { Client } from 'nat-upnp-rejetto'
 import { debounceAsync } from './debounceAsync'
-import { haveTimeout, HOUR, inCommon, ipForUrl, MINUTE, promiseBestEffort, repeat, try_, wantArray } from './cross'
+import { haveTimeout, HOUR, inCommon, ipForUrl, MINUTE, promiseBestEffort, repeat, wantArray } from './cross'
 import { getProjectInfo } from './github'
 import _ from 'lodash'
 import { httpString } from './util-http'
@@ -28,9 +28,9 @@ export const defaultBaseUrl = proxy({
 export const upnpClient = new Client({ timeout: 4_000 })
 const originalMethod = upnpClient.getGateway
 // other client methods call getGateway too, so this will ensure they reuse this same result
-upnpClient.getGateway = debounceAsync(() => originalMethod.apply(upnpClient), 0, { retain: HOUR, retainFailure: 30_000 })
+upnpClient.getGateway = debounceAsync(() => originalMethod.apply(upnpClient), { retain: HOUR, retainFailure: 30_000 })
 upnpClient.getGateway().then(res => {
-    console.debug('upnp', res.gateway.description)
+    console.log('upnp', res.gateway.description)
 }, e => console.debug('upnp failed:', e.message || String(e)))
 
 // poll external ip
@@ -60,17 +60,17 @@ export const getPublicIps = debounceAsync(async () => {
             return validIps
         }) )))
     return defaultBaseUrl.publicIps = _.uniq(ips.flat())
-}, 0, { retain: 10 * MINUTE })
+}, { retain: 10 * MINUTE })
 
 export const getNatInfo = debounceAsync(async () => {
+    const gatewayIpPromise = findGateway().catch(() => undefined)
     const res = await haveTimeout(10_000, upnpClient.getGateway()).catch(() => null)
     const status = await getServerStatus()
     const mappings = res && await haveTimeout(5_000, upnpClient.getMappings()).catch(() => null)
-    console.debug('mappings found', mappings?.map(x => x.description))
-    const gatewayIp = res && try_(() => new URL(res.gateway.description).hostname, () => console.debug('unexpected upnp gw', res.gateway?.description))
-        || await findGateway().catch(() => undefined)
+    console.debug("mappings found", mappings?.map(x => x.description).join(', ') || "none")
     const localIps = await getIps(false)
-    const localIp = res?.address || gatewayIp ? _.maxBy(localIps, x => inCommon(x, gatewayIp!)) : localIps[0]
+    const gatewayIp = await gatewayIpPromise
+    const localIp = res?.address || (gatewayIp ? _.maxBy(localIps, x => inCommon(x, gatewayIp)) : localIps[0])
     const internalPort = status?.https?.listening && status.https.port || status?.http?.listening && status.http.port || undefined
     const mapped = _.find(mappings, x => x.private.host === localIp && x.private.port === internalPort)
     const externalPort = mapped?.public.port
@@ -95,7 +95,9 @@ function findGateway(): Promise<string | undefined> {
     return new Promise((resolve, reject) =>
         exec(IS_WINDOWS || IS_MAC ? 'netstat -rn' : 'route -n', (err, out) => {
             if (err) return reject(err)
-            const re = IS_WINDOWS ? /(?:0\.0\.0\.0 +){2}([\d.]+)/ : IS_MAC ? /default +([\d.]+)/ : /^0\.0\.0\.0 +([\d.]+)/
-            resolve(re.exec(out)?.[1])
+            if (!IS_WINDOWS)
+                return resolve(out.match(IS_MAC ? /default +([\d.]+)/ : /^0\.0\.0\.0 +([\d.]+)/)?.[1])
+            const sortedByMetric = _.sortBy([...out.matchAll(/(?:0\.0\.0\.0 +){2}([\d.]+)\s+[\d.]+\s+(\d+)/g)], x => Number(x[2]))
+            resolve(sortedByMetric[0]?.[1]) // take ip with lowest metric
         }) )
 }

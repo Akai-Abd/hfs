@@ -1,7 +1,7 @@
 // other plugins can use ctx.state.download_counter_ignore to mark downloads that shouldn't be counted
 
 exports.description = "Counts downloads for each file, and displays the total in the list or file menu"
-exports.version = 6 // new format
+exports.version = 6.1 // fix
 exports.apiRequired = 8.89  // openDb
 
 exports.config = {
@@ -16,21 +16,6 @@ exports.configDialog = {
 
 exports.init = async api => {
     const db = await api.openDb('counters.kv', { defaultPutDelay: 5_000, maxPutDelay: 30_000 })
-
-    try { // load legacy file
-        const countersFile = 'counters.yaml'
-        const yaml = api.require('yaml')
-        const { readFile, unlink } = api.require('fs/promises')
-        const data = await readFile(countersFile, 'utf8')
-        for (const [k,v] of Object.entries(yaml.parse(data)))
-            db.put(uri2key(k), v)
-        await unlink(countersFile)
-        api.log("data converted")
-    }
-    catch(err) {
-        if (err.code !== 'ENOENT')
-            api.log(err)
-    }
     return {
         frontend_js: 'main.js',
         frontend_css: 'style.css',
@@ -43,7 +28,7 @@ exports.init = async api => {
                     : ctx.state.originalStream?.getArchiveEntries?.().filter(x => x.at(-1) !== '/').map(x => key + uri2key(x))
                 if (!entries) return
                 for (const k of entries)
-                    db.put(k, db.getSync(k) + 1)
+                    db.put(k, db.getSync(k) + 1 || 1)
             })
         },
         onDirEntry({ entry, listUri })  {
